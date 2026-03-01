@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Nexus | Heritage Private Vault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300;1,600&family=Inter:wght@200;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #d4af37;
+            --gold-glow: rgba(212, 175, 55, 0.3);
+            --bg-deep: #050505;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-deep); 
+            color: #f8fafc; 
+            background-image: 
+                radial-gradient(circle at 50% 0%, #1c1c1c 0%, #050505 100%),
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+        }
+        .serif { font-family: 'Cormorant Garamond', serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.2em; }
+        
+        /* Premium Components */
+        .glass-vault { 
+            background: rgba(10, 10, 10, 0.7); 
+            backdrop-filter: blur(25px); 
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .car-card {
+            position: relative;
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .car-card:hover {
+            border-color: var(--gold);
+            transform: translateY(-8px);
+            box-shadow: 0 10px 30px -10px var(--gold-glow);
+        }
+        .car-card.selected {
+            border-color: var(--gold);
+            background: rgba(212, 175, 55, 0.08);
+        }
+        .car-card img {
+            filter: grayscale(40%) contrast(1.1);
+            transition: all 0.5s ease;
+        }
+        .car-card:hover img {
+            filter: grayscale(0%) contrast(1.1);
+            transform: scale(1.05);
+        }
+
+        .gold-gradient-text {
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Custom Scrollbar */
+        .gallery-grid::-webkit-scrollbar { width: 2px; }
+        .gallery-grid::-webkit-scrollbar-thumb { background: var(--gold); }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+        .shimmer::after {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.03), transparent);
+            transform: rotate(45deg);
+            animation: shimmer 4s infinite;
+        }
+        @keyframes shimmer { 0% { transform: translateX(-100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<nav class="w-full border-b border-white/5 py-6 px-12 flex justify-between items-center sticky top-0 z-50 glass-vault">
+    <div class="flex flex-col">
+        <h1 class="serif text-4xl tracking-tighter text-white">NOCTRA <span class="font-light italic opacity-80">Heritage</span></h1>
+        <div class="flex items-center gap-2 mt-1">
+            <span class="w-2 h-[1px] bg-gold"></span>
+            <span class="mono opacity-50 uppercase text-[8px]">Secure Transaction Node: 0x824</span>
+        </div>
+    </div>
+    
+    <div id="status-indicator" class="flex items-center gap-4">
+        <div class="text-right hidden md:block">
+            <p class="mono text-[8px] opacity-40">ENCRYPTION_STATUS</p>
+            <p id="conn-text" class="mono text-[10px] text-gray-500">OFFLINE</p>
+        </div>
+        <div class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center relative">
+            <div id="conn-dot" class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_10px_red]"></div>
+            <svg class="absolute inset-0 w-full h-full rotate-[-90deg]">
+                <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="1" fill="transparent" class="text-white/5" />
+            </svg>
+        </div>
+    </div>
+</nav>
+
+<main class="container mx-auto px-6 py-12 max-w-7xl">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+
+        <section class="lg:col-span-4 space-y-8">
+            <div class="glass-vault p-10 rounded-[3rem] border-t border-white/10 shimmer">
+                <div class="flex justify-between items-start mb-12">
+                    <h2 class="serif text-xl opacity-60 italic tracking-widest uppercase">The Vault</h2>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="opacity-20"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="0.5"/></svg>
+                </div>
+
+                <div class="space-y-10">
+                    <div>
+                        <label class="mono text-white/30 block mb-2">IDENTIFICATION</label>
+                        <p id="admin-uid" class="text-2xl serif text-white tracking-[0.2em]">--- --- ---</p>
+                    </div>
+
+                    <div class="py-8 border-y border-white/5">
+                        <label class="mono text-white/30 block mb-3">AVAILABLE_CAPITAL</label>
+                        <div class="flex items-baseline gap-2">
+                            <span id="admin-prev-balance" class="serif text-5xl gold-gradient-text">0</span>
+                            <span class="text-sm opacity-30 serif">RWF</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <input type="number" id="topup-amount" placeholder="0.00" 
+                        class="w-full bg-transparent border-b border-white/10 py-4 text-3xl serif focus:outline-none focus:border-gold transition-colors placeholder:opacity-10">
+                        
+                        <button onclick="handleTransaction('/topup','topup-amount','admin-uid')" 
+                        class="w-full bg-white text-black py-5 rounded-full hover:bg-[#d4af37] transition-all duration-500 uppercase text-[10px] font-bold tracking-[0.3em]">
+                            Deposit Funds
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="lg:col-span-8 space-y-8">
+            <div class="glass-vault p-10 rounded-[3rem]">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+                    <div>
+                        <span class="mono text-gold text-[10px] mb-2 block">CURATED SELECTION</span>
+                        <h2 class="serif text-5xl text-white leading-tight">Maison <br>Collection</h2>
+                    </div>
+                    <div class="text-right">
+                        <span class="mono text-white/30 block text-[9px] mb-1">TOTAL_ESTIMATE</span>
+                        <div class="flex items-baseline justify-end gap-2">
+                            <span id="total-cost-display" class="serif text-5xl text-white">0</span>
+                            <span class="text-sm gold-gradient-text serif italic">RWF</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[480px] overflow-y-auto pr-4 mb-10">
+                    </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center pt-10 border-t border-white/5">
+                    <div class="md:col-span-3">
+                        <label class="mono text-white/30 block mb-4">QTY</label>
+                        <div class="flex items-center border border-white/10 rounded-full px-4 py-2">
+                            <button onclick="updateQty(-1)" class="text-xl opacity-50 hover:opacity-100">-</button>
+                            <input type="number" id="pay-qty" value="1" min="1" oninput="calculateTotal()" 
+                            class="w-full bg-transparent text-center serif text-2xl focus:outline-none">
+                            <button onclick="updateQty(1)" class="text-xl opacity-50 hover:opacity-100">+</button>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-9">
+                        <label class="mono text-white/30 block mb-4 text-right">SECURITY_CHALLENGE</label>
+                        <button onclick="handleTransaction('/pay','total-cost-display','pay-uid')" 
+                        class="group relative w-full h-[70px] overflow-hidden rounded-full border border-white/20 transition-all hover:border-gold">
+                            <div class="absolute inset-0 bg-gold translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                            <span class="relative z-10 serif text-2xl italic group-hover:text-black transition-colors flex items-center justify-center gap-4">
+                                Confirm Acquisition 
+                                <span id="pay-uid" class="mono text-[10px] opacity-40 group-hover:text-black/50">ID: ---</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script>
+const socket = io(`http://${window.location.hostname}:9254`);
+
+const products = [
+    { id:101,name:"Italian Tailored Suit",price:850000,img:"https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?auto=format&fit=crop&q=80&w=400"},
+    { id:102,name:"Silk Evening Gown",price:1200000,img:"https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&q=80&w=400"},
+    { id:103,name:"Cashmere Overcoat",price:650000,img:"https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&q=80&w=400"},
+    { id:107,name:"Grand Complication",price:1500000,img:"https://images.unsplash.com/photo-1523170335258-f5ed11844a1e?auto=format&fit=crop&q=80&w=400"},
+    { id:109,name:"Leather Pochette",price:480000,img:"https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&q=80&w=400"},
+    { id:108,name:"Oxford Patina",price:300000,img:"https://images.unsplash.com/photo-1614251055880-ee96e4803393?auto=format&fit=crop&q=80&w=400"},
+    { id:105,name:"Silk Formal Shirt",price:180000,img:"https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&q=80&w=400"},
+    { id:110,name:"Felt Wide Brim",price:150000,img:"https://images.unsplash.com/photo-1514327605112-b887c0e61c0a?auto=format&fit=crop&q=80&w=400"}
+];
+
+let selectedProduct=null;
+
+function initGrid(){
+    const grid=document.getElementById('product-grid');
+    grid.innerHTML=products.map(p=>`
+        <div class="car-card p-4 rounded-3xl bg-white/[0.02] text-center" onclick="selectProduct(${p.id},this)">
+            <div class="overflow-hidden rounded-2xl mb-4 h-32">
+                <img src="${p.img}" class="w-full h-full object-cover">
+            </div>
+            <p class="serif text-sm text-white mb-1 opacity-80">${p.name}</p>
+            <p class="gold-gradient-text mono text-[9px]">${p.price.toLocaleString()}</p>
+        </div>`).join('');
+}
+
+function selectProduct(id,el){
+    document.querySelectorAll('.car-card').forEach(e=>e.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedProduct=products.find(p=>p.id===id);
+    calculateTotal();
+}
+
+function updateQty(val){
+    const q = document.getElementById('pay-qty');
+    let newQty = parseInt(q.value) + val;
+    if(newQty < 1) newQty = 1;
+    q.value = newQty;
+    calculateTotal();
+}
+
+function calculateTotal(){
+    if(!selectedProduct)return;
+    const qty=parseInt(document.getElementById('pay-qty').value)||0;
+    document.getElementById('total-cost-display').innerText=(selectedProduct.price*qty).toLocaleString();
+}
+
+async function handleTransaction(endpoint,inputId,uidId){
+    const uid=document.getElementById(uidId).innerText.replace('ID: ','').replace('---','').trim();
+    const inputEl=document.getElementById(inputId);
+    const amountVal=(inputEl.value||inputEl.innerText).replace(/,/g,'');
+
+    if(!uid||!amountVal||parseInt(amountVal)<=0){alert("Please scan card and select an item.");return;}
+
+    try{
+        const response=await fetch(`http://${window.location.hostname}:9254${endpoint}`,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({uid:uid,amount:parseInt(amountVal)})
+        });
+        if(response.ok) alert("TRANSACTION AUTHORIZED BY VAULT");
+        else{const err=await response.json();alert(err.error);}
+    }catch(err){alert("VAULT OFFLINE: CHECK CONNECTION");}
+}
+
+socket.on('update_ui',(data)=>{
+    document.getElementById('admin-uid').innerText=data.uid;
+    document.getElementById('pay-uid').innerText=`ID: ${data.uid}`;
+    document.getElementById('admin-prev-balance').innerText=data.balance.toLocaleString();
+});
+
+socket.on('connect',()=>{
+    document.getElementById('conn-dot').className="w-2 h-2 bg-green-400 rounded-full shadow-[0_0_15px_#4ade80]";
+    document.getElementById('conn-text').innerText="VAULT_ENCRYPTED";
+    document.getElementById('conn-text').className="mono text-[10px] text-green-400";
+});
+
+initGrid();
+</script>
+
+</body>
+</html>

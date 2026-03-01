@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Nexus | Team Pixel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #05070a; color: #cbd5e1; }
+        .neon-border-cyan { box-shadow: 0 0 10px rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.3); }
+        .neon-border-indigo { box-shadow: 0 0 15px rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); }
+        .neon-text-cyan { text-shadow: 0 0 8px rgba(34, 211, 238, 0.5); color: #22d3ee; }
+        .glass-dark { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* New Product Grid Styles */
+        .product-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); 
+            gap: 12px; 
+            max-height: 400px; 
+            overflow-y: auto; 
+            padding-right: 8px;
+        }
+        .product-grid::-webkit-scrollbar { width: 4px; }
+        .product-grid::-webkit-scrollbar-thumb { background: rgba(34, 211, 238, 0.3); border-radius: 10px; }
+        
+        .product-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .product-card:hover { background: rgba(34, 211, 238, 0.1); border-color: rgba(34, 211, 238, 0.4); transform: translateY(-2px); }
+        .product-card.selected { border-color: #22d3ee; background: rgba(34, 211, 238, 0.15); box-shadow: 0 0 10px rgba(34, 211, 238, 0.2); }
+    </style>
+</head>
+<body class="min-h-screen pb-10">
+
+    <div class="w-full bg-slate-900/50 border-b border-white/5 py-3 px-6 flex justify-between items-center backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-4">
+            <h1 class="text-lg font-black tracking-tighter text-white">RFID<span class="neon-text-cyan italic">NEXUS</span></h1>
+            <span class="text-[10px] mono text-slate-500 uppercase tracking-widest">Node: <span class="text-indigo-400">team_pixel</span></span>
+        </div>
+        <div class="flex items-center gap-3 bg-black/40 px-4 py-1 rounded-full border border-white/5">
+            <span id="conn-status-dot" class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+            <span id="conn-status-text" class="text-[10px] font-bold uppercase tracking-widest text-red-500">Offline</span>
+        </div>
+    </div>
+
+    <main class="container mx-auto px-6 py-8 max-w-6xl">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <section class="lg:col-span-4 neon-border-indigo glass-dark p-6 rounded-[2rem] space-y-6 h-fit">
+                <div class="flex items-center gap-3 border-b border-white/5 pb-4">
+                    <div class="p-2 bg-indigo-500/20 rounded-lg"><svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></div>
+                    <h2 class="text-xl font-bold text-white">Admin: Top-Up</h2>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-black/20 p-4 rounded-xl border border-white/5">
+                        <label class="text-[10px] mono text-slate-500 uppercase">Card UID</label>
+                        <p id="admin-uid" class="text-md mono text-white truncate">--- --- ---</p>
+                    </div>
+                    <div class="bg-black/20 p-4 rounded-xl border border-white/5">
+                        <label class="text-[10px] mono text-slate-500 uppercase">Current Balance</label>
+                        <p id="admin-prev-balance" class="text-xl mono text-indigo-400 font-bold">0 RWF</p>
+                    </div>
+                    <input type="number" id="topup-amount" placeholder="Amount (RWF)" class="w-full bg-black/40 border border-white/5 rounded-xl py-4 px-6 text-white focus:outline-none focus:border-indigo-500 font-bold">
+                    <button onclick="handleTransaction('/topup', 'topup-amount', 'admin-uid')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all">
+                        Execute Top-Up
+                    </button>
+                </div>
+            </section>
+
+            <section class="lg:col-span-8 neon-border-cyan glass-dark p-6 rounded-[2rem] space-y-6">
+                <div class="flex justify-between items-center border-b border-white/5 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-cyan-500/20 rounded-lg"><svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                        <h2 class="text-xl font-bold text-white">Product Catalog</h2>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] mono text-slate-500 block">DUE FROM CARD</span>
+                        <span id="total-cost-display" class="text-2xl font-black neon-text-cyan">0</span><span class="text-xs ml-1 text-cyan-400">RWF</span>
+                    </div>
+                </div>
+
+                <div id="product-grid" class="product-grid">
+                    </div>
+
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 bg-black/30 p-4 rounded-2xl border border-white/5">
+                    <div class="col-span-1">
+                        <label class="text-[10px] mono text-slate-500">QUANTITY</label>
+                        <input type="number" id="pay-qty" value="1" min="1" oninput="calculateTotal()" class="w-full bg-black/40 border border-white/5 rounded-lg p-2 text-white text-center font-bold">
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-[10px] mono text-slate-500">UID</label>
+                        <p id="pay-uid" class="text-xs mono text-white mt-2 truncate">--- --- ---</p>
+                    </div>
+                    <div class="col-span-2">
+                        <button onclick="handleTransaction('/pay', 'total-cost-display', 'pay-uid')" class="w-full h-full bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest text-xs rounded-xl transition-all shadow-lg shadow-cyan-500/20">
+                            Confirm Payment
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="mt-8 neon-border-cyan glass-dark rounded-2xl p-6 bg-black/20">
+            <h3 class="text-[10px] font-bold text-cyan-500/80 uppercase tracking-widest mb-4">Transaction_Ledger.db</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left mono text-[11px]">
+                    <thead class="text-slate-500 border-b border-white/5">
+                        <tr>
+                            <th class="pb-2">TIME</th>
+                            <th class="pb-2">TYPE</th>
+                            <th class="pb-2">UID</th>
+                            <th class="pb-2 text-right">AMOUNT</th>
+                            <th class="pb-2 text-right">STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledger-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const socket = io(`http://${window.location.hostname}:5001`);
+
+        // Large Product Dataset
+        const products = [
+            { id: 1, name: "AirPods Gen 2", price: 120000, img: "https://images.unsplash.com/photo-1588423770674-f2855ee47ba5?w=200", cat: "Apple" },
+            { id: 2, name: "AirPods Pro", price: 250000, img: "https://images.unsplash.com/photo-1588423770674-f2855ee47ba5?w=200", cat: "Apple" },
+            { id: 3, name: "AirPods Max", price: 550000, img: "https://images.unsplash.com/photo-1613040809024-b4ef7ba99bc3?w=200", cat: "Apple" },
+            { id: 4, name: "Sony XM5", price: 380000, img: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200", cat: "Headsets" },
+            { id: 5, name: "Bose QC45", price: 320000, img: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=200", cat: "Headsets" },
+            { id: 6, name: "Beats Studio", price: 280000, img: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=200", cat: "Headsets" },
+            { id: 7, name: "JBL Quantum", price: 85000, img: "https://images.unsplash.com/photo-1612444530582-fc66183b16f7?w=200", cat: "Gaming" },
+            { id: 8, name: "Razer BlackShark", price: 110000, img: "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=200", cat: "Gaming" },
+            { id: 9, name: "Sennheiser HD", price: 195000, img: "https://images.unsplash.com/photo-1545127398-14699f92334b?w=200", cat: "Pro" },
+            { id: 10, name: "Marshall Major", price: 145000, img: "https://images.unsplash.com/photo-1524678606370-a47ad25cb82a?w=200", cat: "Style" },
+            { id: 11, name: "Samsung Buds 2", price: 95000, img: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=200", cat: "Buds" },
+            { id: 12, name: "Logitech G733", price: 160000, img: "https://images.unsplash.com/photo-1612444530582-fc66183b16f7?w=200", cat: "Gaming" }
+        ];
+
+        let selectedProduct = null;
+
+        // Initialize Product Grid
+        function initGrid() {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = products.map(p => `
+                <div class="product-card p-3 rounded-2xl text-center" onclick="selectProduct(${p.id}, this)">
+                    <img src="${p.img}" class="w-16 h-16 mx-auto rounded-lg mb-2 object-cover border border-white/5">
+                    <p class="text-[10px] font-bold text-white truncate">${p.name}</p>
+                    <p class="text-[10px] text-cyan-400 mono">${p.price.toLocaleString()}</p>
+                </div>
+            `).join('');
+        }
+
+        function selectProduct(id, element) {
+            document.querySelectorAll('.product-card').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedProduct = products.find(p => p.id === id);
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            if (!selectedProduct) return;
+            const qty = parseInt(document.getElementById('pay-qty').value) || 0;
+            document.getElementById('total-cost-display').innerText = selectedProduct.price * qty;
+        }
+
+        // Socket logic - Updated to push UID and balance automatically
+        socket.on('update_ui', (data) => {
+            document.getElementById('admin-uid').innerText = data.uid;
+            document.getElementById('pay-uid').innerText = data.uid;
+            document.getElementById('admin-prev-balance').innerText = data.balance.toLocaleString() + " RWF";
+            
+            // Only add to ledger if it's a Top-up or Payment transaction
+            if (data.type === 'TOP-UP' || data.type === 'PAYMENT') {
+                addToLedger(data);
+            }
+        });
+
+        async function handleTransaction(endpoint, inputId, uidId) {
+            const uid = document.getElementById(uidId).innerText;
+            const inputEl = document.getElementById(inputId);
+            
+            // Handle both input fields (topup) and span text (payment)
+            const amountVal = inputEl.value !== undefined ? inputEl.value : inputEl.innerText;
+            
+            if (uid === "--- --- ---" || !amountVal || parseInt(amountVal) <= 0) {
+                alert("🚨 Please scan card & select product/amount!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${window.location.hostname}:5001${endpoint}`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ uid: uid, amount: parseInt(amountVal) })
+                });
+                const res = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ Transaction Success! New Balance: ${res.new_balance} RWF`);
+                } else {
+                    alert(`❌ Error: ${res.error}`);
+                }
+            } catch (err) { 
+                alert("📡 Connection error: Check if backend is running."); 
+            }
+        }
+
+        function addToLedger(data) {
+            const row = document.createElement('tr');
+            row.className = `border-b border-white/5 ${data.type === 'TOP-UP' ? "text-indigo-400" : "text-cyan-400"}`;
+            row.innerHTML = `
+                <td class="py-3 opacity-50">${data.time || new Date().toLocaleTimeString()}</td>
+                <td class="py-3 font-bold">${data.type}</td>
+                <td class="py-3">${data.uid}</td>
+                <td class="py-3 text-right">${data.type === 'TOP-UP' ? '+' : '-'}${data.amount}</td>
+                <td class="py-3 text-right">SUCCESS</td>
+            `;
+            document.getElementById('ledger-body').prepend(row);
+        }
+
+        socket.on('connect', () => {
+            document.getElementById('conn-status-dot').className = "w-2 h-2 bg-cyan-400 rounded-full";
+            document.getElementById('conn-status-text').innerText = "System Live";
+            document.getElementById('conn-status-text').className = "text-[10px] font-bold text-cyan-400";
+        });
+
+        initGrid();
+    </script>
+</body>
+</html>

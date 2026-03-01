@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Edge | RFID Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f1a; }
+        .stat-card { background: #161b2c; border: 1px solid #2d3748; }
+        .accent-cyan { color: #22d3ee; }
+        .bg-cyan-gradient { background: linear-gradient(135deg, #0891b2 0%, #22d3ee 100%); }
+        .status-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-slate-300 antialiased">
+
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-8 py-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-cyan-gradient rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <span class="text-xl font-bold text-white tracking-tight">Edge<span class="font-light text-slate-400">Control</span></span>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+                    <span id="hw-status-dot" class="w-2 h-2 bg-red-500 rounded-full status-pulse"></span>
+                    <span id="hw-status-text" class="font-semibold uppercase tracking-tighter text-slate-400">Backend Offline</span>
+                </div>
+                <span class="px-3 py-1.5 rounded-full border border-slate-700 font-mono italic text-cyan-400">team_pixel</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-8">
+        <div class="grid grid-cols-12 gap-6">
+            
+            <div class="col-span-12 lg:col-span-8 space-y-6">
+                <div class="stat-card p-8 rounded-3xl shadow-2xl relative overflow-hidden transition-all hover:border-cyan-500/50">
+                    <div class="relative z-10 grid grid-cols-2 gap-8">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">RFID Identifier</p>
+                            <h2 id="card-uid" class="text-3xl font-mono text-white tracking-tighter">WAITING FOR SCAN</h2>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Account Balance</p>
+                            <p class="text-5xl font-bold text-white tracking-tighter">
+                                <span id="card-balance">0</span> <span class="text-lg text-cyan-500 font-normal">RWF</span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="absolute -right-20 -bottom-20 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl"></div>
+                </div>
+
+                <div class="stat-card rounded-2xl p-6 h-[400px] flex flex-col">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-cyan-500 rounded-full"></span> System Activity Log
+                    </h3>
+                    <div id="logs" class="flex-grow overflow-y-auto space-y-3 custom-scrollbar pr-2 font-mono text-[11px]">
+                        <p class="text-slate-600 italic">Initializing secure MQTT tunnel...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-span-12 lg:col-span-4">
+                <div class="stat-card p-8 rounded-3xl border-b-4 border-cyan-500 shadow-xl">
+                    <h3 class="text-lg font-bold text-white mb-6">Top-Up Terminal</h3>
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-3">Transaction Amount</label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">RWF</span>
+                                <input type="number" id="amount" placeholder="0.00" 
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-xl py-4 pl-14 pr-4 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all">
+                            </div>
+                        </div>
+                        
+                        <button onclick="sendTopUp()" 
+                            class="bg-cyan-gradient w-full py-4 rounded-xl text-slate-900 font-bold uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-cyan-900/20">
+                            Execute Top-Up
+                        </button>
+
+                        <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-[10px] text-slate-500 leading-relaxed">
+                            <span class="text-cyan-500 font-bold mr-1">PROTOCOL:</span> MQTT (Publish-Subscribe) messaging bridge. Data is transmitted via VPS relay for card write verification.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const socket = io(`http://${window.location.hostname}:5000`);
+        const logContainer = document.getElementById('logs');
+
+        function addLog(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const p = document.createElement('p');
+            const color = type === 'success' ? 'text-cyan-400' : 'text-slate-500';
+            p.className = `border-l border-slate-800 pl-4 py-1 ${color}`;
+            p.innerHTML = `<span class="opacity-40 mr-3 text-[10px]">${time}</span> ${msg}`;
+            logContainer.prepend(p);
+        }
+
+        socket.on('connect', () => {
+            document.getElementById('hw-status-dot').className = "w-2 h-2 bg-cyan-500 rounded-full status-pulse";
+            document.getElementById('hw-status-text').innerText = "Edge Connected";
+            document.getElementById('hw-status-text').classList.add('text-cyan-400');
+            addLog("Websocket Handshake Established", 'success');
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('hw-status-dot').className = "w-2 h-2 bg-red-500 rounded-full";
+            document.getElementById('hw-status-text').innerText = "Backend Offline";
+            addLog("Connection Interrupted");
+        });
+
+        socket.on('update_ui', (data) => {
+            if(data.uid) {
+                document.getElementById('card-uid').innerText = data.uid;
+                addLog(`Inbound Packet: RFID_UID(${data.uid})`, 'success');
+            }
+            if(data.balance !== undefined) document.getElementById('card-balance').innerText = data.balance;
+            if(data.new_balance !== undefined) {
+                document.getElementById('card-balance').innerText = data.new_balance;
+                addLog(`Transaction Verified: New Balance ${data.new_balance} RWF`, 'success');
+            }
+        });
+
+        async function sendTopUp() {
+            const uid = document.getElementById('card-uid').innerText;
+            const amount = document.getElementById('amount').value;
+
+            if(uid === "WAITING FOR SCAN" || !amount) {
+                alert("Scan card and enter amount."); return;
+            }
+
+            try {
+                addLog(`Outbound Command: TOPUP_REQUEST(${amount} RWF)`);
+                await fetch(`http://${window.location.hostname}:5000/topup`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ uid: uid, amount: parseInt(amount) })
+                });
+            } catch (err) {
+                addLog("API Error: Gateway Unreachable");
+            }
+        }
+    </script>
+</body>
+</html>

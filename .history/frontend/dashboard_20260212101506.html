@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFID Top-Up Dashboard</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>RFID Card System - <span id="team-id">team_pixel</span></h1>
+    
+    <div>
+        <h3>Card Info</h3>
+        <p>UID: <span id="card-uid">Waiting...</span></p>
+        <p>Balance: <span id="card-balance">0</span> RWF</p>
+    </div>
+
+    <hr>
+
+    <h3>Top-Up</h3>
+    <input type="number" id="amount" placeholder="Amount">
+    <button onclick="sendTopUp()">Add Money</button>
+
+    <script>
+        // Connect to your Backend VPS
+        const socket = io("http://YOUR_VPS_IP:5000");
+
+        // Listen for real-time updates from Backend
+        socket.on('update_ui', (data) => {
+            console.log("Update received:", data);
+            if(data.uid) document.getElementById('card-uid').innerText = data.uid;
+            if(data.balance) document.getElementById('card-balance').innerText = data.balance;
+            if(data.new_balance) document.getElementById('card-balance').innerText = data.new_balance;
+        });
+
+        // Function to send HTTP POST to Backend
+        async function sendTopUp() {
+            const uid = document.getElementById('card-uid').innerText;
+            const amount = document.getElementById('amount').value;
+
+            const response = await fetch("http://YOUR_VPS_IP:5000/topup", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ uid: uid, amount: parseInt(amount) })
+            });
+            const result = await response.json();
+            alert(result.status);
+        }
+    </script>
+</body>
+</html>
