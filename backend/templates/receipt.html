@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt #{{ tx.id }} | Noctra Heritage Vault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body{
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:#020617;
+            color:#e5e7eb;
+        }
+        @media print{
+            body{background:#ffffff;color:#000000;}
+            .no-print{display:none;}
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center py-8 px-4">
+    <div class="w-full max-w-xl bg-slate-900/90 border border-slate-700 rounded-3xl shadow-2xl p-8">
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-xl font-semibold tracking-tight">Noctra Heritage Private Vault</h1>
+                <p class="text-xs text-slate-400 mt-1">RFID Transaction Receipt</p>
+            </div>
+            <div class="text-right text-xs text-slate-400">
+                <p><span class="font-semibold text-slate-200">Receipt #</span> {{ tx.id }}</p>
+                <p><span class="font-semibold text-slate-200">Issued</span> {{ tx.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+            </div>
+        </div>
+
+        <div class="border-t border-dashed border-slate-700 pt-4 mt-2 space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span class="text-slate-400">Card UID</span>
+                <span class="font-mono text-slate-100">{{ tx.uid }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Operation</span>
+                <span class="font-semibold {% if tx.type == 'TOP-UP' %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                    {{ tx.type }}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Amount</span>
+                <span class="font-semibold text-slate-100">{{ "{:,}".format(tx.amount) }} RWF</span>
+            </div>
+            {% if card %}
+            <div class="flex justify-between">
+                <span class="text-slate-400">Vault Balance After Tx</span>
+                <span class="font-semibold text-slate-100">{{ "{:,}".format(card.balance) }} RWF</span>
+            </div>
+            {% endif %}
+            <div class="flex justify-between">
+                <span class="text-slate-400">Performed By</span>
+                <span class="font-semibold text-slate-100">{{ tx.performed_by or 'system' }} ({{ tx.role or 'n/a' }})</span>
+            </div>
+        </div>
+
+        <div class="border-t border-dashed border-slate-700 mt-6 pt-4 text-[11px] text-slate-500">
+            <p>This receipt confirms that the above transaction has been committed to the vault database and broadcast to the RFID edge node.</p>
+        </div>
+
+        <div class="mt-6 flex justify-between items-center no-print">
+            <button onclick="window.print()"
+                    class="px-4 py-2 rounded-full bg-slate-100 text-slate-900 text-xs font-semibold uppercase tracking-[0.2em]">
+                Print
+            </button>
+            <button onclick="window.close()"
+                    class="px-4 py-2 rounded-full border border-slate-500 text-xs uppercase tracking-[0.2em]">
+                Close
+            </button>
+        </div>
+    </div>
+</body>
+</html>
+

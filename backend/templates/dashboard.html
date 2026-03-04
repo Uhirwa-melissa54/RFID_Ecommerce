@@ -111,8 +111,28 @@
 </nav>
 
 <main class="container mx-auto px-6 py-12 max-w-7xl">
+    <div class="mb-6 flex justify-between items-center text-xs text-white/60">
+        <div>
+            <span class="mono block">SIGNED_IN_AS</span>
+            <span class="mono text-[10px] uppercase">
+                {{ current_user.username or 'GUEST' }} ({{ current_user.role or 'none' }})
+            </span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="text-right">
+                <p class="mono text-[9px] opacity-50">TOTAL_FLOAT</p>
+                <p id="metric-total-balance" class="serif text-lg">0 RWF</p>
+            </div>
+            <a href="{{ url_for('logout') }}" class="mono text-[10px] uppercase tracking-[0.3em] text-white/60 hover:text-gold">
+                Logout
+            </a>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
 
+        {% if current_user.role == 'agent' %}
+        <!-- Agent: Wallet top-up console -->
         <section class="lg:col-span-4 space-y-8">
             <div class="glass-vault p-10 rounded-[3rem] border-t border-white/10 shimmer">
                 <div class="flex justify-between items-start mb-12">
@@ -146,8 +166,11 @@
                 </div>
             </div>
         </section>
+        {% endif %}
 
         <section class="lg:col-span-8 space-y-8">
+            {% if current_user.role == 'sales' %}
+            <!-- Salesperson: product selection and payment -->
             <div class="glass-vault p-10 rounded-[3rem]">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
                     <div>
@@ -188,6 +211,40 @@
                             </span>
                         </button>
                     </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Consolidated Dashboard: recent transactions (visible to all roles) -->
+            <div class="glass-vault p-8 rounded-[3rem] space-y-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <span class="mono text-gold text-[10px] mb-2 block">CONSOLIDATED_LEDGER</span>
+                        <h3 class="serif text-3xl">Vault Activity</h3>
+                    </div>
+                    <div class="text-right text-xs mono text-white/50 space-y-1">
+                        <div>Top‑Ups: <span id="metric-total-topups" class="text-white">0</span> RWF</div>
+                        <div>Payments: <span id="metric-total-payments" class="text-white">0</span> RWF</div>
+                        <div>Active Cards: <span id="metric-card-count" class="text-white">0</span></div>
+                    </div>
+                </div>
+
+                <div class="mt-4 border border-white/5 rounded-2xl overflow-hidden">
+                    <table class="w-full text-left text-xs mono">
+                        <thead class="bg-white/5 text-white/60">
+                            <tr>
+                                <th class="px-4 py-3">Time</th>
+                                <th class="px-4 py-3">Card UID</th>
+                                <th class="px-4 py-3">Type</th>
+                                <th class="px-4 py-3 text-right">Amount (RWF)</th>
+                                <th class="px-4 py-3">By</th>
+                                <th class="px-4 py-3">Role</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-transactions-body" class="divide-y divide-white/5">
+                            <!-- Filled dynamically -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
@@ -256,15 +313,56 @@ async function handleTransaction(endpoint,inputId,uidId){
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({uid:uid,amount:parseInt(amountVal)})
         });
-        if(response.ok) alert("TRANSACTION AUTHORIZED BY VAULT");
-        else{const err=await response.json();alert(err.error);}
+        const data = await response.json();
+        if(response.ok) {
+            alert("TRANSACTION AUTHORIZED BY VAULT");
+            if(data.receipt_url){
+                window.open(data.receipt_url, '_blank');
+            }
+            loadDashboard();
+        } else {
+            alert(data.error || "Transaction failed");
+        }
     }catch(err){alert("VAULT OFFLINE: CHECK CONNECTION");}
 }
 
+async function loadDashboard(){
+    try{
+        const response = await fetch(`http://${window.location.hostname}:9254/dashboard_data`);
+        if(!response.ok) return;
+        const data = await response.json();
+        const s = data.summary;
+        document.getElementById('metric-total-topups').innerText = s.total_topups.toLocaleString();
+        document.getElementById('metric-total-payments').innerText = s.total_payments.toLocaleString();
+        document.getElementById('metric-card-count').innerText = s.card_count;
+        document.getElementById('metric-total-balance').innerText = `${s.total_balance.toLocaleString()} RWF`;
+
+        const tbody = document.getElementById('recent-transactions-body');
+        tbody.innerHTML = data.recent_transactions.map(t => `
+            <tr class="hover:bg-white/5 transition-colors">
+                <td class="px-4 py-2">${t.timestamp}</td>
+                <td class="px-4 py-2">${t.uid}</td>
+                <td class="px-4 py-2 ${t.type === 'TOP-UP' ? 'text-green-400' : 'text-red-400'}">${t.type}</td>
+                <td class="px-4 py-2 text-right">${t.amount.toLocaleString()}</td>
+                <td class="px-4 py-2">${t.performed_by || '-'}</td>
+                <td class="px-4 py-2 uppercase">${t.role || '-'}</td>
+            </tr>
+        `).join('');
+    }catch(e){
+        // fail silently on dashboard fetch
+    }
+}
+
 socket.on('update_ui',(data)=>{
-    document.getElementById('admin-uid').innerText=data.uid;
-    document.getElementById('pay-uid').innerText=`ID: ${data.uid}`;
-    document.getElementById('admin-prev-balance').innerText=data.balance.toLocaleString();
+    const adminUidEl = document.getElementById('admin-uid');
+    const payUidEl = document.getElementById('pay-uid');
+    const adminBalanceEl = document.getElementById('admin-prev-balance');
+
+    if(adminUidEl){ adminUidEl.innerText = data.uid; }
+    if(payUidEl){ payUidEl.innerText = `ID: ${data.uid}`; }
+    if(adminBalanceEl){ adminBalanceEl.innerText = data.balance.toLocaleString(); }
+
+    loadDashboard();
 });
 
 socket.on('connect',()=>{
@@ -274,6 +372,7 @@ socket.on('connect',()=>{
 });
 
 initGrid();
+loadDashboard();
 </script>
 
 </body>

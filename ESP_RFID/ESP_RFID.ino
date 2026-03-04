@@ -5,8 +5,8 @@
 #include <SPI.h>
 
 /* ================= WIFI CONFIG ================= */
-const char* WIFI_SSID = "Keza";
-const char* WIFI_PASS = "ineza2008";
+const char* WIFI_SSID = "RCA-OFFICE";
+const char* WIFI_PASS = "RCA@2024";
 
 const char* MQTT_BROKER = "broker.benax.rw";
 const int MQTT_PORT = 1883;
